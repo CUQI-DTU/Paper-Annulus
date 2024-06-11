@@ -22,9 +22,9 @@ class PipeGeometry(cuqi.geometry.Geometry):
     @property
     def par_shape(self):
         if self.geom_type == "Free":
-            return (self.nodisks*5,) 
+            return (self.nodisks*4,) 
         elif self.geom_type == "ConcentricConstrained":
-            return (self.nodisks*2+3,)
+            return (self.nodisks*2+2,)
     
     def disk(self, centerpos1, centerpos2, radius, abscoeff):
 
@@ -57,16 +57,13 @@ class PipeGeometry(cuqi.geometry.Geometry):
                 varnames.append("x{}".format(i))
             for i in range(self.nodisks):
                 varnames.append("y{}".format(i))
-            for i in range(self.nodisks):
-                varnames.append("r{}".format(i))
 
         elif self.geom_type == "ConcentricConstrained":
             varnames.append("x")
             varnames.append("y")
-            varnames.append("r")
         
         for i in range(self.nodisks):
-            varnames.append("w{}".format(i))
+            varnames.append("r{}".format(i))
         for i in range(self.nodisks):
             varnames.append("mu{}".format(i))
 
@@ -83,16 +80,12 @@ class Free(PipeGeometry):
         centerpos1 = params[:self.nodisks]
         centerpos2 = params[self.nodisks:2*self.nodisks]
         radii = params[2*self.nodisks:3*self.nodisks]
-        widths = params[3*self.nodisks:4*self.nodisks]
-        abscoeffs = params[4*self.nodisks:]
+        abscoeffs = params[3*self.nodisks:]
         #idx_sort = radii.argsort()
 
-        # draw annuli
         image = np.zeros((self.pixeldim, self.pixeldim))
         for i in range(self.nodisks)[::-1]:#idx_sort[::-1]:
-            tmp, val = self.disk(centerpos1[i], centerpos2[i], radii[i] + widths[i], abscoeffs[i])
-            image[tmp!=0] = val
-            tmp, val = self.disk(centerpos1[i], centerpos2[i], radii[i], 0)
+            tmp, val = self.disk(centerpos1[i], centerpos2[i], np.sum(radii[0:i+1]), abscoeffs[i])
             image[tmp!=0] = val
 
         return image
@@ -106,17 +99,14 @@ class ConcentricConstrained(PipeGeometry):
     def par2fun(self, params):
         centerpos1 = params[0]
         centerpos2 = params[1]
-        radius = params[2]
-        widths = params[3:3+self.nodisks]
-        abscoeffs = params[3+self.nodisks:]
+        radii = params[2:2+self.nodisks]
+        abscoeffs = params[2+self.nodisks:]
         #idx_sort = radii.argsort()
         
         image = np.zeros((self.pixeldim, self.pixeldim))
         for i in range(self.nodisks)[::-1]:#idx_sort[::-1]:
-            tmp, val = self.disk(centerpos1, centerpos2, radius + np.sum(widths[0:i+1]), abscoeffs[i])
+            tmp, val = self.disk(centerpos1, centerpos2, np.sum(radii[0:i+1]), abscoeffs[i])
             image[tmp!=0] = val
-        tmp, val = self.disk(centerpos1, centerpos2, radius, 0)
-        image[tmp!=0] = val
         return image
 
 class Organizer:
@@ -136,20 +126,18 @@ class Organizer:
             paramno = 1
         elif paramtype == "radius":
             paramno = 2
-        elif paramtype == "width":
-            paramno = 3
         elif paramtype == "abscoeff":
-            paramno = 4
+            paramno = 3
 
         if self.pipe_geometry.geom_type == "Free":
             idx = paramno*(self.pipe_geometry.nodisks) + diskno
         elif self.pipe_geometry.geom_type == "ConcentricConstrained":
-            if paramno < 3:
+            if paramno < 2:
                 idx = paramno
+            elif paramno == 2:
+                idx = 2 + diskno
             elif paramno == 3:
-                idx = 3 + diskno
-            elif paramno == 4:
-                idx = 3 + diskno + self.pipe_geometry.nodisks
+                idx = 2 + diskno + self.pipe_geometry.nodisks
 
         tmp = {"paramtype": paramtype,
                "diskno": diskno,
@@ -163,7 +151,6 @@ class Organizer:
         center_x = np.zeros(self.pipe_geometry.nodisks)
         center_y = np.zeros(self.pipe_geometry.nodisks)
         radius = np.zeros(self.pipe_geometry.nodisks)
-        width = np.zeros(self.pipe_geometry.nodisks)
         abscoeff = np.zeros(self.pipe_geometry.nodisks)
         for i in range(self.pipe_geometry.par_shape[0]):
             exec("%s[%d] = %f" % (self.paramlist[i]["paramtype"],self.paramlist[i]["diskno"],self.paramlist[i]["value"]))
@@ -171,9 +158,8 @@ class Organizer:
         if self.pipe_geometry.geom_type == "ConcentricConstrained":
             center_x = center_x[0]
             center_y = center_y[0]
-            radius = radius[0]
         
-        out = np.hstack((center_x, center_y, radius, width, abscoeff))
+        out = np.hstack((center_x, center_y, radius, abscoeff))
         return out
 
     def get_prior(self, name = None):
