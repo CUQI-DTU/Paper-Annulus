@@ -27,7 +27,7 @@ os.makedirs(resultpath, exist_ok=True)
 # Define annulus parameters (ground_truth can be defined now or later)
 #=========================================================================
 norings = 2
-annulus_geom_type = "ConcentricConstrained_annuli"
+annulus_geom_type = "ConcentricConnected_annuli"
 
 param0 = annulus_geometry.Annulus_Param("center_x", 0, value = 0.1, prior=cuqi.distribution.Uniform(low = -1, high = 1))
 param1 = annulus_geometry.Annulus_Param("center_y", 0, value = 0.2, prior=cuqi.distribution.Uniform(low = -1, high = 1))
@@ -79,7 +79,7 @@ model_phantom = FanBeam2DModel(im_size = (Nphantom,Nphantom),
                                 proj_type = "cuda")
 
 # Geometry
-phantom_geometry = annulus_geometry.ConcentricConstrained_annuli(norings=norings, imagesize=domain, pixeldim = Nphantom, c_coords='cartesian')
+phantom_geometry = annulus_geometry.ConcentricConnected_annuli(norings=norings, imagesize=domain, pixeldim = Nphantom, c_coords='cartesian')
 model_phantom.domain_geometry = phantom_geometry
 
 # Setup phantom from annulus params
@@ -115,7 +115,7 @@ model_recon = FanBeam2DModel(im_size = (N,N),
                                 proj_type = "cuda")
 
 # Geometry
-recon_geometry = annulus_geometry.ConcentricConstrained_annuli(norings=norings, imagesize=domain, pixeldim = N, c_coords='cartesian')
+recon_geometry = annulus_geometry.ConcentricConnected_annuli(norings=norings, imagesize=domain, pixeldim = N, c_coords='cartesian')
 model_recon.domain_geometry = recon_geometry
 
 # Define ground truth with recon geometry

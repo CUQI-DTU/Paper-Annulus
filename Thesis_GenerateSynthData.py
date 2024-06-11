@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import os
 import dill
 
-from Thesis_AnnulusGeometry import ConcentricConstrained, Organizer
+from Thesis_AnnulusGeometry import ConcentricConnected, Organizer
 # cuqipy version 0.3.0
 import cuqi
 # cuqipy-cil version 0.6.0
@@ -35,7 +35,7 @@ except Exception: # this command not being found can raise quite a few different
 N = 1024
 
 # pipe prior
-pipe_parameterization = "ConcentricConstrained"
+pipe_parameterization = "ConcentricConnected"
 nolayers = 1
 
 # likelihood
@@ -64,7 +64,7 @@ det_spacing = 10/DetectorCount
 m = DetectorCount * AngleCount
 
 # Geometries
-pipe_geom = ConcentricConstrained(nolayers=nolayers, imagesize=domain, pixeldim = N, c_coords='cartesian')
+pipe_geom = ConcentricConnected(nolayers=nolayers, imagesize=domain, pixeldim = N, c_coords='cartesian')
 
 # Model
 A = FanBeam2DModel(im_size = (N,N),

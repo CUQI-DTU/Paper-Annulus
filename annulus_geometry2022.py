@@ -62,7 +62,7 @@ class Annulus(cuqi.geometry.Geometry):
 
             if self.annulus_geom_type == "Free_annuli":
                 idx[i] = anno*5 + paramno
-            elif self.annulus_geom_type == "ConcentricConstrained_annuli":
+            elif self.annulus_geom_type == "ConcentricConnnected_annuli":
                 if paramno < 3:
                     idx[i] = paramno
                 elif paramno == 3:
@@ -104,7 +104,7 @@ class Annulus(cuqi.geometry.Geometry):
             for i in range(self.norings):
                 varnames.append("r{}".format(i))
 
-        elif self.annulus_geom_type == "ConcentricConstrained_annuli":
+        elif self.annulus_geom_type == "ConcentricConnected_annuli":
             varnames.append("x")
             varnames.append("y")
             varnames.append("r")
@@ -127,7 +127,7 @@ class Annulus(cuqi.geometry.Geometry):
             for i in range(self.norings*5):
                 exec("%s[%d] = %f" % (annulus_params_list[i].paramtype,annulus_params_list[i].annulusno,annulus_params_list[i].value))
 
-        elif self.annulus_geom_type == "ConcentricConstrained_annuli":
+        elif self.annulus_geom_type == "ConcentricConnected_annuli":
             center_x = np.zeros(1)
             center_y = np.zeros(1)
             inner_r = np.zeros(1)
@@ -158,7 +158,7 @@ class Annulus(cuqi.geometry.Geometry):
                 tmp = Annulus_Param("abscoeff", 4*self.norings+i, prior=None, value = cuqi_params_vec[4*self.norings+i])
                 annulusparams.append(tmp)
 
-        if self.annulus_geom_type == "ConcentricConstrained_annuli":
+        if self.annulus_geom_type == "ConcentricConnected_annuli":
             tmp = Annulus_Param("center_x", 0, prior=None, value = cuqi_params_vec[0])
             annulusparams.append(tmp)
             tmp = Annulus_Param("center_y", 1, prior=None, value = cuqi_params_vec[1])
@@ -198,11 +198,11 @@ class Free_annuli(Annulus):
                 image += self.annulus(centerpos_lens[i], centerpos_angles[i], innerradii[i], widths[i], abscoeffs[i])
         return image
 
-class ConcentricConstrained_annuli(Annulus):
+class ConcentricConnected_annuli(Annulus):
 
     def __init__(self, norings, imagesize, pixeldim = 1000, c_coords = 'polar'):
 
-        super().__init__(norings, imagesize, pixeldim, c_coords, "ConcentricConstrained_annuli")
+        super().__init__(norings, imagesize, pixeldim, c_coords, "ConcentricConnected_annuli")
 
     @property
     def shape(self): #Shape of parameter space

@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import os
 import dill
 
-from Thesis_AnnulusGeometry import ConcentricConstrained, Free, Organizer
+from Thesis_AnnulusGeometry import ConcentricConnected, Free, Organizer
 # cuqipy version 0.3.0
 import cuqi
 # cuqipy-cil version 0.6.0
@@ -42,7 +42,7 @@ dataname = 'OneAnnulus_CC_std01'
 N = 500
 
 # pipe prior
-pipe_parameterization = "ConcentricConstrained"
+pipe_parameterization = "ConcentricConnected"
 nolayers = 1
 prior_type = "Mixed" # For 1 annulus case: "Uniform" or "Mixed"
 
@@ -79,7 +79,7 @@ det_spacing = 10/DetectorCount
 m = DetectorCount * AngleCount
 
 # Geometries
-pipe_geom = ConcentricConstrained(nolayers=nolayers, imagesize=domain, pixeldim = N, c_coords='cartesian')
+pipe_geom = ConcentricConnected(nolayers=nolayers, imagesize=domain, pixeldim = N, c_coords='cartesian')
 
 # Model
 A = FanBeam2DModel(im_size = (N,N),

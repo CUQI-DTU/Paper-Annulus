@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import os
 #import dill
 
-from annulus_geometry2023 import ConcentricConstrained, Free, Organizer
+from annulus_geometry2023 import Concentric, Free, Organizer
 # GitHub cuqi Spring 2023
 import cuqi
 

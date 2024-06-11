@@ -31,7 +31,7 @@ class PipeGeometry(cuqi.geometry.Geometry): # Should subclass from Discrete
     def par_shape(self):
         if self.geom_type == "Free":
             return (self.nolayers*5,) 
-        elif self.geom_type == "ConcentricConstrained":
+        elif self.geom_type == "ConcentricConnected":
             return (self.nolayers*2+3,)
     
     def disk(self, centerpos1, centerpos2, radius, abscoeff):
@@ -68,7 +68,7 @@ class PipeGeometry(cuqi.geometry.Geometry): # Should subclass from Discrete
             for i in range(self.nolayers):
                 varnames.append("r{}".format(i))
 
-        elif self.geom_type == "ConcentricConstrained":
+        elif self.geom_type == "ConcentricConnected":
             varnames.append(r"$x$")
             varnames.append(r"$y$")
             varnames.append(r"$r$")
@@ -105,11 +105,11 @@ class Free(PipeGeometry):
 
         return image
 
-class ConcentricConstrained(PipeGeometry):
+class ConcentricConnected(PipeGeometry):
 
     def __init__(self, nolayers, imagesize, pixeldim = 1000, c_coords = 'polar'):
 
-        super().__init__(nolayers, imagesize, pixeldim, c_coords, "ConcentricConstrained")
+        super().__init__(nolayers, imagesize, pixeldim, c_coords, "ConcentricConnected")
 
     def par2fun(self, params):
         centerpos1 = params[0]
@@ -151,7 +151,7 @@ class Organizer:
 
         if self.pipe_geometry.geom_type == "Free":
             idx = paramno*(self.pipe_geometry.nolayers) + diskno
-        elif self.pipe_geometry.geom_type == "ConcentricConstrained":
+        elif self.pipe_geometry.geom_type == "ConcentricConnected":
             if paramno < 3:
                 idx = paramno
             elif paramno == 3:
@@ -176,7 +176,7 @@ class Organizer:
         for i in range(self.pipe_geometry.par_shape[0]):
             exec("%s[%d] = %f" % (self.paramlist[i]["paramtype"],self.paramlist[i]["diskno"],self.paramlist[i]["value"]))
 
-        if self.pipe_geometry.geom_type == "ConcentricConstrained":
+        if self.pipe_geometry.geom_type == "ConcentricConnected":
             center_x = center_x[0]
             center_y = center_y[0]
             radius = radius[0]

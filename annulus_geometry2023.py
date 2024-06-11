@@ -23,7 +23,7 @@ class PipeGeometry(cuqi.geometry.Geometry):
     def par_shape(self):
         if self.geom_type == "Free":
             return (self.nodisks*4,) 
-        elif self.geom_type == "ConcentricConstrained":
+        elif self.geom_type == "Concentric":
             return (self.nodisks*2+2,)
     
     def disk(self, centerpos1, centerpos2, radius, abscoeff):
@@ -58,7 +58,7 @@ class PipeGeometry(cuqi.geometry.Geometry):
             for i in range(self.nodisks):
                 varnames.append("y{}".format(i))
 
-        elif self.geom_type == "ConcentricConstrained":
+        elif self.geom_type == "Concentric":
             varnames.append("x")
             varnames.append("y")
         
@@ -90,11 +90,11 @@ class Free(PipeGeometry):
 
         return image
 
-class ConcentricConstrained(PipeGeometry):
+class Concentric(PipeGeometry):
 
     def __init__(self, nolayers, imagesize, pixeldim = 1000, c_coords = 'polar'):
 
-        super().__init__(nolayers, imagesize, pixeldim, c_coords, "ConcentricConstrained")
+        super().__init__(nolayers, imagesize, pixeldim, c_coords, "Concentric")
 
     def par2fun(self, params):
         centerpos1 = params[0]
@@ -131,7 +131,7 @@ class Organizer:
 
         if self.pipe_geometry.geom_type == "Free":
             idx = paramno*(self.pipe_geometry.nodisks) + diskno
-        elif self.pipe_geometry.geom_type == "ConcentricConstrained":
+        elif self.pipe_geometry.geom_type == "Concentric":
             if paramno < 2:
                 idx = paramno
             elif paramno == 2:
@@ -155,7 +155,7 @@ class Organizer:
         for i in range(self.pipe_geometry.par_shape[0]):
             exec("%s[%d] = %f" % (self.paramlist[i]["paramtype"],self.paramlist[i]["diskno"],self.paramlist[i]["value"]))
 
-        if self.pipe_geometry.geom_type == "ConcentricConstrained":
+        if self.pipe_geometry.geom_type == "Concentric":
             center_x = center_x[0]
             center_y = center_y[0]
         
@@ -188,22 +188,3 @@ class Organizer:
             return np.squeeze(s)
 
         return cuqi.distribution.UserDefinedDistribution(dim=self.pipe_geometry.par_shape[0], logpdf_func=_prior_logpdf, sample_func = _prior_sample, gradient_func = _prior_gradient, geometry = self.pipe_geometry, name = name)
-
-
-# class myUserDefinedDistribution(cuqi.distribution.UserDefinedDistribution):
-#     def __init__(self, dim=None, logpdf_func=None, gradient_func=None, sample_func=None, **kwargs):
-#         super().__init__(dim=dim, logpdf_func=logpdf_func, gradient_func=gradient_func, sample_func=sample_func, **kwargs)
-
-#     def get_conditioning_variables(self):
-#         """Return the conditioning variables of this distribution (if any)."""
-        
-#         # Get all mutable variables
-#         mutable_vars = self.get_mutable_variables()
-
-#         # Loop over mutable variables and if None they are conditioning variables
-#         cond_vars = [key for key in mutable_vars if getattr(self, key) is None]
-
-#         # Add any variables defined through callable functions
-#         cond_vars += cuqi.utilities.get_indirect_variables(self)
-        
-#         return cond_vars
