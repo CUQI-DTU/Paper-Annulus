@@ -3,17 +3,16 @@
 # By Silja L. Christensen
 # June 2024
 ###################################################
-
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import sys
 import dill
 
 from AnnulusGeometry2024 import PipeParam, PipeParamsCollection, DiskFree, DiskConcentric, AnnulusFree, AnnulusConcentricConnected
 # cuqipy version 1.0.0
 from cuqi.distribution import Gaussian, Gamma, Uniform, JointDistribution
 from cuqi.sampler import CWMH
+from cuqi.samples import Samples
 from cuqi.experimental.mcmc import CWMHNew, HybridGibbsNew, MHNew
 from cuqi.likelihood import Likelihood
 from cuqi.array import CUQIarray
@@ -223,7 +222,7 @@ r2 = DF10.prior
 phi2 = DF11.prior
 
 # data
-d  = Gaussian(mean = lambda cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2: A(CUQIarray([cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2], geometry = pipe_geometry)), 
+d  = Gaussian(mean = lambda cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2: A(np.array([cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2])), 
                 sqrtcov = noise_std, geometry=A.range_geometry)
 # cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2
 # 0, 0, 0, 0, 0, 0, 0.4, 0.9, 1.1, 0.7, 0.3
@@ -241,18 +240,31 @@ theta0 = theta.sample(1)
 
 # Gibbs sampler
 sampling_strategy = {
-    "cx0" : MHNew(scale = sample_scale, initial_point = 0),
-    "cx1" : MHNew(scale = sample_scale, initial_point = 0),
-    "cx2" : MHNew(scale = sample_scale, initial_point = 0),
-    "cy0" : MHNew(scale = sample_scale, initial_point = 0),
-    "cy1" : MHNew(scale = sample_scale, initial_point = 0),
-    "cy2" : MHNew(scale = sample_scale, initial_point = 0),
-    "r0" : MHNew(scale = sample_scale, initial_point = 0.4),
-    "r1" : MHNew(scale = sample_scale, initial_point = 0.9),
-    "r2" : MHNew(scale = sample_scale, initial_point = 1.1),
-    "phi1" : MHNew(scale = sample_scale, initial_point = 0.7),
-    "phi2" : MHNew(scale = sample_scale, initial_point = 0.3)
+    "cx0" : MHNew(scale = sample_scale),
+    "cx1" : MHNew(scale = sample_scale),
+    "cx2" : MHNew(scale = sample_scale),
+    "cy0" : MHNew(scale = sample_scale),
+    "cy1" : MHNew(scale = sample_scale),
+    "cy2" : MHNew(scale = sample_scale),
+    "r0" : MHNew(scale = sample_scale),
+    "r1" : MHNew(scale = sample_scale),
+    "r2" : MHNew(scale = sample_scale),
+    "phi1" : MHNew(scale = sample_scale),
+    "phi2" : MHNew(scale = sample_scale)
 }
+
+# Set initial points in distributions (not in sampling strategy) - Interface should be improved
+cx0.init_point = 0
+cx1.init_point = 0
+cx2.init_point = 0
+cy0.init_point = 0
+cy1.init_point = 0
+cy2.init_point = 0
+r0.init_point = 0.4
+r1.init_point = 0.9
+r2.init_point = 1.1
+phi1.init_point = 0.7
+phi2.init_point = 0.3
 
 sampler = HybridGibbsNew(posterior, sampling_strategy)
 
@@ -263,7 +275,14 @@ sampler.warmup(Nb)
 # sample
 sampler.sample(Ns)
 samples_all = sampler.get_samples()
-samples = samples_all.burnthin(Nb)
+
+# %%
+# Combine data from all individual samples (currently stored in a dict due to Gibbs)
+# Perhaps we could use a samples_all.combine() method to do this?
+samples_array = np.array([samples_all[key].samples for key in samples_all.keys()]).reshape(len(samples_all.keys()), -1)
+samples = Samples(samples_array, geometry = pipe_geometry)
+
+samples = samples.burnthin(Nb)
 
 #%%=======================================================================
 # save data
