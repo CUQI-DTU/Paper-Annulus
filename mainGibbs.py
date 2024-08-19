@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import dill
+import sys
 
 from AnnulusGeometry2024 import PipeParam, PipeParamsCollection, DiskFree, DiskConcentric, AnnulusFree, AnnulusConcentricConnected
 # cuqipy version 1.0.0
@@ -48,62 +49,37 @@ imagesize = 4
 # Parameter lib
 #=========================================================================
 
-# DiskFree
-DF1 = PipeParam(paramtype = "center_x", 
-                layerno = 0,
-                truevalue = -0.1,
+# AnnulusCC
+ACC1 = PipeParam(paramtype = "center_x", 
+                layerno = 1,
+                truevalue = 0.1,
                 prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF2 = PipeParam(paramtype = "center_y", 
-                layerno = 0,
+ACC2 = PipeParam(paramtype = "center_y", 
+                layerno = 1,
                 truevalue = 0.2,
                 prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF3 = PipeParam(paramtype = "radius", 
-                layerno = 0, 
+ACC3 = PipeParam(paramtype = "radius", 
+                layerno = 1, 
                 truevalue = 0.4,
                 prior=Uniform(low = 0.3, high = 0.5))
-DF4 = PipeParam(paramtype = "center_x", 
+ACC4 = PipeParam(paramtype = "width", 
                 layerno = 1,
-                truevalue = -0.1,
-                prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF5 = PipeParam(paramtype = "center_y", 
-                layerno = 1,
-                truevalue = 0.2,
-                prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF6 = PipeParam(paramtype = "radius", 
-                layerno = 1, 
-                truevalue = 0.9,
-                prior=Uniform(low = 0.7, high = 1.1))
-DF7 = PipeParam(paramtype = "abscoeff", 
+                truevalue = 0.5,
+                prior=Uniform(low = 0.4, high = 0.6))
+ACC5 = PipeParam(paramtype = "abscoeff", 
                 layerno = 1,
                 truevalue = 0.7,
                 prior=Gamma(shape = 2, rate = 2))
-DF8 = PipeParam(paramtype = "center_x", 
-                layerno = 2,
-                truevalue = 0,
-                prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF9 = PipeParam(paramtype = "center_y", 
-                layerno = 2,
-                truevalue = 0.1,
-                prior=Gaussian(mean = 0, sqrtcov = 0.5))
-DF10 = PipeParam(paramtype = "radius", 
-                layerno = 2, 
-                truevalue = 1.1,
-                prior=Uniform(low = 0.9, high = 1.3))
-DF11 = PipeParam(paramtype = "abscoeff", 
-                layerno = 2,
-                truevalue = 0.3,
-                prior=Gamma(shape = 2, rate = 2))
-
 
 #%%=======================================================================
 # Parameter lib
 #=========================================================================
 
-nolayers = 2
+nolayers = 1
 
-pipeparams_list = [DF1, DF2, DF3, DF4, DF5, DF6, DF7, DF8, DF9, DF10, DF11]
+pipeparams_list = [ACC1, ACC2, ACC3, ACC4, ACC5]
 
-pipe_geometry = DiskFree(nolayers, imagesize, N)
+pipe_geometry = AnnulusConcentricConnected(nolayers, imagesize, N)
 
 # Collect the info above in one object
 PPCollection = PipeParamsCollection(pipeparams_list = pipeparams_list, pipe_geometry = pipe_geometry)
@@ -111,8 +87,8 @@ PPCollection = PipeParamsCollection(pipeparams_list = pipeparams_list, pipe_geom
 #%%=======================================================================
 # Sampling params
 #=========================================================================
-Ns = 150     # no of samples in each chain
-Nb = 50       # Burnin
+Ns = 2000     # no of samples in each chain
+Nb = 4000       # Burnin
 Nt = 1#50         # Thinning
 sample_scale = 1e-3 # Initial sample scale
 
@@ -135,7 +111,7 @@ A = ShiftedFanBeam2DModel(im_size = (N,N),
                     angles = angles,
                     source_y = -source_object_dist,
                     detector_y = object_detector_dist,
-                    beamshift_x = -1.2,
+                    beamshift_x = 0,#-1.2,
                     det_spacing = 4/DetectorCount,
                     domain = (imagesize,imagesize))
 
@@ -164,8 +140,8 @@ plt.savefig(resultpath + resultname + '_ag.png')
 # Synthetic data
 #=========================================================================
 
-pipeparams_list_phantom = [DF1, DF2, DF3, DF4, DF5, DF6, DF7, DF8, DF9, DF10, DF11]
-pipe_geometry_phantom = DiskFree(nolayers, imagesize, N_phantom)
+pipeparams_list_phantom = [ACC1, ACC2, ACC3, ACC4, ACC5]
+pipe_geometry_phantom = AnnulusConcentricConnected(nolayers, imagesize, N_phantom)
 
 # Model
 A_phantom = ShiftedFanBeam2DModel(im_size = (N_phantom,N_phantom),
@@ -173,7 +149,7 @@ A_phantom = ShiftedFanBeam2DModel(im_size = (N_phantom,N_phantom),
                     angles = angles,
                     source_y = -source_object_dist,
                     detector_y = object_detector_dist,
-                    beamshift_x = -1.2,
+                    beamshift_x = 0,#-1.2,
                     det_spacing = 4/DetectorCount,
                     domain = (imagesize,imagesize))
 
@@ -205,98 +181,156 @@ cbar = plt.colorbar(cs[0], cax=cax)
 plt.savefig(resultpath + resultname +  '_sinogram.png')
 
 #%%=======================================================================
-# Specification and sampling of Bayesian problem
+# Specification of prior, data distribution and posterior
 #=========================================================================
 
+# cx = ACC1.prior
+# cy = ACC2.prior
+# r = ACC3.prior
+# w = ACC4.prior
+# phi = ACC5.prior
+
+# # prior
+# theta = PPCollection.get_prior()
+
+# # data 
+# d  = Gaussian(mean = A(theta), sqrtcov = noise_std, geometry=A.range_geometry)
+
+# # posterior
+# posterior = JointDistribution(theta, d)(d=d_obs)
+
+# # data
+# d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
+#                 sqrtcov = noise_std, geometry=A.range_geometry)
+
+# # posterior
+# posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
+
+#%%=======================================================================
+# CWMH vs Gibbs to illustrate sampling scale problem
+#=========================================================================
+
+################### CWMH ########################
 # prior
-cx0 = DF1.prior
-cy0 = DF2.prior
-r0 = DF3.prior
-cx1 = DF4.prior
-cy1 = DF5.prior
-r1 =  DF6.prior
-phi1 = DF7.prior
-cx2 = DF8.prior
-cy2 = DF9.prior
-r2 = DF10.prior
-phi2 = DF11.prior
-
-# data
-d  = Gaussian(mean = lambda cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2: A(np.array([cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2])), 
-                sqrtcov = noise_std, geometry=A.range_geometry)
-# cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2
-# 0, 0, 0, 0, 0, 0, 0.4, 0.9, 1.1, 0.7, 0.3
-
-# posterior
-posterior = JointDistribution(cx0, cx1, cx2, cy0, cy1, cy2, r0, r1, r2, phi1, phi2, d)(d=d_obs)
-
-print(posterior(cx1=0, cx2=0, cy0=0, cy1=0, cy2=0, r0=0.4, r1=0.9, r2=1.1, phi1=0.7, phi2=0.3).logd(1))
-
-# sample
-np.random.seed(10)
-# setup initial guess as random sample from prior
 theta = PPCollection.get_prior()
-theta0 = theta.sample(1)
+# data 
+d  = Gaussian(mean = A(theta), sqrtcov = noise_std, geometry=A.range_geometry)
+# posterior
+posterior = JointDistribution(theta, d)(d=d_obs)
+
+np.random.seed(10)
+# New CWMH
+samplerCWMH = CWMHNew(posterior, scale = sample_scale)
+# warmup
+#samplerCWMH.warmup(Nb)
+# sample
+samplerCWMH.sample(Nb+Ns)
+samplesCWMH = samplerCWMH.get_samples()
+
+plt.figure()
+samplesCWMH.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
+plt.savefig(resultpath + resultname + '_allchainsCWMH.png')
+for i in range(pipe_geometry.par_shape[0]):
+    plt.figure()
+    samplesCWMH.burnthin(Nb).plot_chain(variable_indices=i)
+    plt.savefig(resultpath + resultname + '_chain{}CWMH.png'.format(i))
+
+################### Gibbs #######################
+# prior
+cx = ACC1.prior
+cy = ACC2.prior
+r = ACC3.prior
+w = ACC4.prior
+phi = ACC5.prior
+# data
+d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
+                sqrtcov = noise_std, geometry=A.range_geometry)
+# posterior
+posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
+
+np.random.seed(10)
+# Gibbs sampler
+sampling_strategy = {
+    "cx" : MHNew(scale = sample_scale),
+    "cy" : MHNew(scale = sample_scale),
+    "r" : MHNew(scale = sample_scale),
+    "w" : MHNew(scale = sample_scale),
+    "phi" : MHNew(scale = sample_scale)
+}
+
+samplerGibbs = HybridGibbsNew(posterior, sampling_strategy)
+
+# warmup
+#samplerGibbs.warmup(Nb)
+# sample
+samplerGibbs.sample(Nb+Ns)
+samplesGibbs = samplerGibbs.get_samples()
+
+samples_array = np.array([samplesGibbs[key].samples for key in samplesGibbs.keys()]).reshape(len(samplesGibbs.keys()), -1)
+samplesGibbs = Samples(samples_array, geometry = pipe_geometry)
+
+plt.figure()
+samplesGibbs.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
+plt.savefig(resultpath + resultname + '_allchainsGibbs.png')
+for i in range(pipe_geometry.par_shape[0]):
+    plt.figure()
+    samplesGibbs.burnthin(Nb).plot_chain(variable_indices=i)
+    plt.savefig(resultpath + resultname + '_chain{}Gibbs.png'.format(i))
+
+
+#%%=======================================================================
+# Illustrattion of problem with initial points in Gibbs
+#=========================================================================
+# prior
+cx = ACC1.prior
+cy = ACC2.prior
+r = ACC3.prior
+w = ACC4.prior
+phi = ACC5.prior
+# data
+d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
+                sqrtcov = noise_std, geometry=A.range_geometry)
+# posterior
+posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
+
+np.random.seed(10)
 
 # Gibbs sampler
 sampling_strategy = {
-    "cx0" : MHNew(scale = sample_scale),
-    "cx1" : MHNew(scale = sample_scale),
-    "cx2" : MHNew(scale = sample_scale),
-    "cy0" : MHNew(scale = sample_scale),
-    "cy1" : MHNew(scale = sample_scale),
-    "cy2" : MHNew(scale = sample_scale),
-    "r0" : MHNew(scale = sample_scale),
-    "r1" : MHNew(scale = sample_scale),
-    "r2" : MHNew(scale = sample_scale),
-    "phi1" : MHNew(scale = sample_scale),
-    "phi2" : MHNew(scale = sample_scale)
+    "cx" : MHNew(scale = sample_scale),
+    "cy" : MHNew(scale = sample_scale),
+    "r" : MHNew(scale = sample_scale),
+    "w" : MHNew(scale = sample_scale),
+    "phi" : MHNew(scale = sample_scale)
 }
 
 # Set initial points in distributions (not in sampling strategy) - Interface should be improved
-cx0.init_point = 0
-cx1.init_point = 0
-cx2.init_point = 0
-cy0.init_point = 0
-cy1.init_point = 0
-cy2.init_point = 0
-r0.init_point = 0.4
-r1.init_point = 0.9
-r2.init_point = 1.1
-phi1.init_point = 0.7
-phi2.init_point = 0.3
+cx.init_point = 0
+cy.init_point = 0
+r.init_point = 0.3
+w.init_point = 0.4
+phi.init_point = 0.6
 
-sampler = HybridGibbsNew(posterior, sampling_strategy)
+# Gives error if posterior is placed here after init point is sat as above
+#posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs) 
 
-print(sampler)
+samplerInitPoint = HybridGibbsNew(posterior, sampling_strategy)
 
 # warmup
-sampler.warmup(Nb)
+samplerInitPoint.warmup(Nb)
 # sample
-sampler.sample(Ns)
-samples_all = sampler.get_samples()
+samplerInitPoint.sample(Ns)
+samplesInitPoint = samplerInitPoint.get_samples()
+samples_array = np.array([samplesInitPoint[key].samples for key in samplesInitPoint.keys()]).reshape(len(samplesInitPoint.keys()), -1)
+samplesInitPoint = Samples(samples_array, geometry = pipe_geometry)
 
-# %%
-# Combine data from all individual samples (currently stored in a dict due to Gibbs)
-# Perhaps we could use a samples_all.combine() method to do this?
-samples_array = np.array([samples_all[key].samples for key in samples_all.keys()]).reshape(len(samples_all.keys()), -1)
-samples = Samples(samples_array, geometry = pipe_geometry)
-
-samples = samples.burnthin(Nb)
-
-#%%=======================================================================
-# save data
-#=========================================================================
-
-paramnames = pipe_geometry.variables
-
-# plot chain
 plt.figure()
-samples_all.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
-plt.savefig(resultpath + resultname + '_chainswithwarmup.png')
+samplesInitPoint.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
+plt.savefig(resultpath + resultname + '_allchainsInitPoint.png')
+
 
 #%%=======================================================================
 # save data
 #=========================================================================
-with open('{}{}.pkl'.format(resultpath,resultname), 'wb') as f:  # Python 3: open(..., 'wb')
-    dill.dump([samples, sampler, PPCollection, A], f)
+# with open('{}{}.pkl'.format(resultpath,resultname), 'wb') as f:  # Python 3: open(..., 'wb')
+#     dill.dump([samples, sampler, PPCollection, A], f)
