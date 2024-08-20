@@ -3,10 +3,11 @@
 # By Silja L. Christensen
 # June 2024
 ###################################################
+# %%
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import dill
+#import dill
 import sys
 
 from AnnulusGeometry2024 import PipeParam, PipeParamsCollection, DiskFree, DiskConcentric, AnnulusFree, AnnulusConcentricConnected
@@ -29,14 +30,19 @@ try:
 except Exception: # this command not being found can raise quite a few different errors depending on the configuration
     print('No Nvidia GPU in system!')
 
+# %%
+# Settings
+save_fig = False
+
 #%%=======================================================================
 # Paths
 #=========================================================================
 
 # path for saving results
-resultpath = '../../../../../../work3/swech/results/'
-resultname = 'GibbsTest'
-os.makedirs(resultpath, exist_ok=True)
+if save_fig:
+    resultpath = '../../../../../../work3/swech/results/'
+    resultname = 'GibbsTest'
+    os.makedirs(resultpath, exist_ok=True)
 
 #%%=======================================================================
 # Discretization
@@ -87,8 +93,8 @@ PPCollection = PipeParamsCollection(pipeparams_list = pipeparams_list, pipe_geom
 #%%=======================================================================
 # Sampling params
 #=========================================================================
-Ns = 2000     # no of samples in each chain
-Nb = 4000       # Burnin
+Ns = 500    # no of samples in each chain
+Nb = 500       # Burnin
 Nt = 1#50         # Thinning
 sample_scale = 1e-3 # Initial sample scale
 
@@ -119,7 +125,8 @@ A = ShiftedFanBeam2DModel(im_size = (N,N),
 A.domain_geometry = pipe_geometry
 
 show_geometry(A.acquisition_geometry, A.image_geometry)
-plt.savefig(resultpath + resultname + '_ag.png')
+if save_fig:
+    plt.savefig(resultpath + resultname + '_ag.png')
 
 # FP = A(CUQIarray([0, 0, 0, 0, 0, 0, 0.1, 0.2, 0.3, 0.1, 0.2], geometry = pipe_geometry))
 
@@ -178,7 +185,8 @@ cs[0].axes.set_ylabel('View angle [degree]')
 fig.subplots_adjust(right=0.85, bottom=0.15)
 cax = fig.add_axes([cs[0].axes.get_position().x1+0.01,cs[0].axes.get_position().y0,0.03,cs[0].axes.get_position().height])
 cbar = plt.colorbar(cs[0], cax=cax)
-plt.savefig(resultpath + resultname +  '_sinogram.png')
+if save_fig:
+    plt.savefig(resultpath + resultname +  '_sinogram.png')
 
 #%%=======================================================================
 # Specification of prior, data distribution and posterior
@@ -218,6 +226,9 @@ d  = Gaussian(mean = A(theta), sqrtcov = noise_std, geometry=A.range_geometry)
 # posterior
 posterior = JointDistribution(theta, d)(d=d_obs)
 
+# Print logd of posterior at initial point
+print('Posterior logd at np.array([0, 0, 0.3, 0.4, 0.6]) = {}'.format(posterior.logd(np.array([0, 0, 0.3, 0.4, 0.6]))) )
+
 np.random.seed(10)
 # New CWMH
 samplerCWMH = CWMHNew(posterior, scale = sample_scale)
@@ -229,11 +240,18 @@ samplesCWMH = samplerCWMH.get_samples()
 
 plt.figure()
 samplesCWMH.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
-plt.savefig(resultpath + resultname + '_allchainsCWMH.png')
+
+if save_fig:
+    plt.savefig(resultpath + resultname + '_allchainsCWMH.png')
+
 for i in range(pipe_geometry.par_shape[0]):
-    plt.figure()
-    samplesCWMH.burnthin(Nb).plot_chain(variable_indices=i)
-    plt.savefig(resultpath + resultname + '_chain{}CWMH.png'.format(i))
+
+    #plt.figure()
+    #samplesCWMH.burnthin(Nb).plot_chain(variable_indices=i)
+
+    if save_fig:
+        plt.savefig(resultpath + resultname + '_chain{}CWMH.png'.format(i))
+
 
 ################### Gibbs #######################
 # prior
@@ -247,6 +265,9 @@ d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])),
                 sqrtcov = noise_std, geometry=A.range_geometry)
 # posterior
 posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
+
+# Print logd of posterior at initial point
+print('Posterior logd at cx=0, cy=0, r=0.3, w=0.4, phi=0.6 = {}'.format(posterior.logd(0, 0, 0.3, 0.4, 0.6)) )
 
 np.random.seed(10)
 # Gibbs sampler
@@ -271,11 +292,16 @@ samplesGibbs = Samples(samples_array, geometry = pipe_geometry)
 
 plt.figure()
 samplesGibbs.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
-plt.savefig(resultpath + resultname + '_allchainsGibbs.png')
+if save_fig:
+    plt.savefig(resultpath + resultname + '_allchainsGibbs.png')
+
 for i in range(pipe_geometry.par_shape[0]):
-    plt.figure()
-    samplesGibbs.burnthin(Nb).plot_chain(variable_indices=i)
-    plt.savefig(resultpath + resultname + '_chain{}Gibbs.png'.format(i))
+
+    #plt.figure()
+    #samplesGibbs.burnthin(Nb).plot_chain(variable_indices=i)
+
+    if save_fig:
+        plt.savefig(resultpath + resultname + '_chain{}Gibbs.png'.format(i))
 
 
 #%%=======================================================================
@@ -290,6 +316,16 @@ phi = ACC5.prior
 # data
 d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
                 sqrtcov = noise_std, geometry=A.range_geometry)
+
+# Set initial points in distributions (not in sampling strategy) - Interface should be improved
+# Must be set before creating the joint distribution
+# Also must be arrays it seems! ;(
+cx.init_point = np.array([0])
+cy.init_point = np.array([0])
+r.init_point = np.array([0.3])
+w.init_point = np.array([0.4])
+phi.init_point = np.array([0.6])
+
 # posterior
 posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
 
@@ -304,16 +340,6 @@ sampling_strategy = {
     "phi" : MHNew(scale = sample_scale)
 }
 
-# Set initial points in distributions (not in sampling strategy) - Interface should be improved
-cx.init_point = 0
-cy.init_point = 0
-r.init_point = 0.3
-w.init_point = 0.4
-phi.init_point = 0.6
-
-# Gives error if posterior is placed here after init point is sat as above
-#posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs) 
-
 samplerInitPoint = HybridGibbsNew(posterior, sampling_strategy)
 
 # warmup
@@ -326,7 +352,8 @@ samplesInitPoint = Samples(samples_array, geometry = pipe_geometry)
 
 plt.figure()
 samplesInitPoint.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
-plt.savefig(resultpath + resultname + '_allchainsInitPoint.png')
+if save_fig:
+    plt.savefig(resultpath + resultname + '_allchainsInitPoint.png')
 
 
 #%%=======================================================================
