@@ -13,9 +13,8 @@ import sys
 from AnnulusGeometry2024 import PipeParam, PipeParamsCollection, DiskFree, DiskConcentric, AnnulusFree, AnnulusConcentricConnected
 # cuqipy version 1.0.0
 from cuqi.distribution import Gaussian, Gamma, Uniform, JointDistribution
-from cuqi.sampler import CWMH
 from cuqi.samples import Samples
-from cuqi.experimental.mcmc import CWMHNew, HybridGibbsNew, MHNew
+from cuqi.experimental.mcmc import CWMH, HybridGibbs, MH
 from cuqi.likelihood import Likelihood
 from cuqi.array import CUQIarray
 # cuqipy-cil version 0.6.0
@@ -231,11 +230,13 @@ print('Posterior logd at np.array([0, 0, 0.3, 0.4, 0.6]) = {}'.format(posterior.
 
 np.random.seed(10)
 # New CWMH
-samplerCWMH = CWMHNew(posterior, scale = sample_scale)
+samplerCWMH = CWMH(posterior, scale = sample_scale)
+
 # warmup
-#samplerCWMH.warmup(Nb)
+samplerCWMH.warmup(Nb)
+
 # sample
-samplerCWMH.sample(Nb+Ns)
+samplerCWMH.sample(Ns)
 samplesCWMH = samplerCWMH.get_samples()
 
 plt.figure()
@@ -272,19 +273,21 @@ print('Posterior logd at cx=0, cy=0, r=0.3, w=0.4, phi=0.6 = {}'.format(posterio
 np.random.seed(10)
 # Gibbs sampler
 sampling_strategy = {
-    "cx" : MHNew(scale = sample_scale),
-    "cy" : MHNew(scale = sample_scale),
-    "r" : MHNew(scale = sample_scale),
-    "w" : MHNew(scale = sample_scale),
-    "phi" : MHNew(scale = sample_scale)
+    "cx" : MH(scale = sample_scale),
+    "cy" : MH(scale = sample_scale),
+    "r" : MH(scale = sample_scale),
+    "w" : MH(scale = sample_scale),
+    "phi" : MH(scale = sample_scale)
 }
 
-samplerGibbs = HybridGibbsNew(posterior, sampling_strategy)
+samplerGibbs = HybridGibbs(posterior, sampling_strategy)
 
 # warmup
-#samplerGibbs.warmup(Nb)
+samplerGibbs.warmup(Nb)
+
 # sample
-samplerGibbs.sample(Nb+Ns)
+samplerGibbs.sample(Ns)
+
 samplesGibbs = samplerGibbs.get_samples()
 
 samples_array = np.array([samplesGibbs[key].samples for key in samplesGibbs.keys()]).reshape(len(samplesGibbs.keys()), -1)
@@ -333,19 +336,21 @@ np.random.seed(10)
 
 # Gibbs sampler
 sampling_strategy = {
-    "cx" : MHNew(scale = sample_scale),
-    "cy" : MHNew(scale = sample_scale),
-    "r" : MHNew(scale = sample_scale),
-    "w" : MHNew(scale = sample_scale),
-    "phi" : MHNew(scale = sample_scale)
+    "cx" : MH(scale = sample_scale),
+    "cy" : MH(scale = sample_scale),
+    "r" : MH(scale = sample_scale),
+    "w" : MH(scale = sample_scale),
+    "phi" : MH(scale = sample_scale)
 }
 
-samplerInitPoint = HybridGibbsNew(posterior, sampling_strategy)
+samplerInitPoint = HybridGibbs(posterior, sampling_strategy)
 
 # warmup
 samplerInitPoint.warmup(Nb)
+
 # sample
 samplerInitPoint.sample(Ns)
+
 samplesInitPoint = samplerInitPoint.get_samples()
 samples_array = np.array([samplesInitPoint[key].samples for key in samplesInitPoint.keys()]).reshape(len(samplesInitPoint.keys()), -1)
 samplesInitPoint = Samples(samples_array, geometry = pipe_geometry)
