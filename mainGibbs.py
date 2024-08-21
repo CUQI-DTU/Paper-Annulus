@@ -12,9 +12,9 @@ import sys
 
 from AnnulusGeometry2024 import PipeParam, PipeParamsCollection, DiskFree, DiskConcentric, AnnulusFree, AnnulusConcentricConnected
 # cuqipy version 1.0.0
-from cuqi.distribution import Gaussian, Gamma, Uniform, JointDistribution
+from cuqi.distribution import Gaussian, Gamma, Uniform, JointDistribution, Distribution
 from cuqi.samples import Samples
-from cuqi.experimental.mcmc import CWMH, HybridGibbs, MH
+from cuqi.experimental.mcmc import CWMH, HybridGibbs, MH, ProposalBasedSampler
 from cuqi.likelihood import Likelihood
 from cuqi.array import CUQIarray
 # cuqipy-cil version 0.6.0
@@ -29,9 +29,86 @@ try:
 except Exception: # this command not being found can raise quite a few different errors depending on the configuration
     print('No Nvidia GPU in system!')
 
+#%%
+class myMH(ProposalBasedSampler): # copyed from CUQIpy, but this way I can easily test small changes
+    """ Metropolis-Hastings (MH) sampler.
+
+    Parameters
+    ----------
+    target : cuqi.density.Density
+        Target density or distribution.
+
+    proposal : cuqi.distribution.Distribution or callable
+        Proposal distribution. If None, a random walk MH is used (i.e., Gaussian proposal with identity covariance).
+
+    scale : float
+        Scaling parameter for the proposal distribution.
+
+    kwargs : dict
+        Additional keyword arguments to be passed to the base class :class:`ProposalBasedSampler`.
+
+    """
+
+    _STATE_KEYS = ProposalBasedSampler._STATE_KEYS.union({'scale', '_scale_temp'})
+
+    def __init__(self, target=None, proposal=None, scale=1, **kwargs):
+        super().__init__(target, proposal=proposal, scale=scale, **kwargs)
+
+    def _initialize(self):
+        # Due to a bug? in old MH, we must keep track of this extra variable to match behavior.
+        self._scale_temp = self.scale
+
+    def validate_target(self):
+        # Fail only when there is no log density, which is currently assumed to be the case in case NaN is returned.
+        if np.isnan(self.target.logd(self._default_initial_point)):
+            raise ValueError("Target does not have valid logd")
+
+    def validate_proposal(self):
+        if not isinstance(self.proposal, Distribution):
+            raise ValueError("Proposal must be a cuqi.distribution.Distribution object")
+        if not self.proposal.is_symmetric:
+            raise ValueError("Proposal must be symmetric")
+
+    def step(self):
+        # propose state
+        xi = self.proposal.sample(1)   # sample from the proposal
+        x_star = self.current_point + self.scale*xi.flatten()   # MH proposal
+
+        # evaluate target
+        target_eval_star = self.target.logd(x_star)
+
+        # ratio and acceptance probability
+        ratio = target_eval_star - self.current_target_logd # proposal is symmetric
+        alpha = min(0, ratio)
+
+        # accept/reject
+        u_theta = np.log(np.random.rand())
+        acc = 0
+        if (u_theta <= alpha):
+            self.current_point = x_star
+            self.current_target_logd = target_eval_star
+            acc = 1
+        
+        return acc
+
+    def tune(self, skip_len, update_count):
+        
+        print(len(self._acc))
+        hat_acc = np.mean(self._acc[-skip_len:])
+
+        # d. compute new scaling parameter
+        zeta = 1/np.sqrt(update_count+1)   # ensures that the variation of lambda(i) vanishes
+
+        # We use self._scale_temp here instead of self.scale in update. This might be a bug,
+        # but is equivalent to old MH
+        self._scale_temp = np.exp(np.log(self._scale_temp) + zeta*(hat_acc-0.234))
+
+        # update parameters
+        self.scale = min(self._scale_temp, 1)
+
 # %%
 # Settings
-save_fig = False
+save_fig = True
 
 #%%=======================================================================
 # Paths
@@ -89,13 +166,6 @@ pipe_geometry = AnnulusConcentricConnected(nolayers, imagesize, N)
 # Collect the info above in one object
 PPCollection = PipeParamsCollection(pipeparams_list = pipeparams_list, pipe_geometry = pipe_geometry)
 
-#%%=======================================================================
-# Sampling params
-#=========================================================================
-Ns = 500    # no of samples in each chain
-Nb = 500       # Burnin
-Nt = 1#50         # Thinning
-sample_scale = 1e-3 # Initial sample scale
 
 #%%=======================================================================
 # Define model
@@ -116,8 +186,8 @@ A = ShiftedFanBeam2DModel(im_size = (N,N),
                     angles = angles,
                     source_y = -source_object_dist,
                     detector_y = object_detector_dist,
-                    beamshift_x = 0,#-1.2,
-                    det_spacing = 4/DetectorCount,
+                    beamshift_x = 0,
+                    det_spacing = det_spacing,
                     domain = (imagesize,imagesize))
 
 # Configure model
@@ -155,8 +225,8 @@ A_phantom = ShiftedFanBeam2DModel(im_size = (N_phantom,N_phantom),
                     angles = angles,
                     source_y = -source_object_dist,
                     detector_y = object_detector_dist,
-                    beamshift_x = 0,#-1.2,
-                    det_spacing = 4/DetectorCount,
+                    beamshift_x = 0,
+                    det_spacing = det_spacing,
                     domain = (imagesize,imagesize))
 
 # Configure model
@@ -188,34 +258,14 @@ if save_fig:
     plt.savefig(resultpath + resultname +  '_sinogram.png')
 
 #%%=======================================================================
-# Specification of prior, data distribution and posterior
-#=========================================================================
-
-# cx = ACC1.prior
-# cy = ACC2.prior
-# r = ACC3.prior
-# w = ACC4.prior
-# phi = ACC5.prior
-
-# # prior
-# theta = PPCollection.get_prior()
-
-# # data 
-# d  = Gaussian(mean = A(theta), sqrtcov = noise_std, geometry=A.range_geometry)
-
-# # posterior
-# posterior = JointDistribution(theta, d)(d=d_obs)
-
-# # data
-# d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
-#                 sqrtcov = noise_std, geometry=A.range_geometry)
-
-# # posterior
-# posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
-
-#%%=======================================================================
 # CWMH vs Gibbs to illustrate sampling scale problem
 #=========================================================================
+
+Ns = 500    # no of samples in each chain
+Nb = 500       # Burnin
+Nt = 1#50         # Thinning
+sample_scale = 1e-2 # Initial sample scale
+theta0 = np.array([0, 0, 0.3, 0.4, 0.6]) # Initial point
 
 ################### CWMH ########################
 # prior
@@ -226,14 +276,17 @@ d  = Gaussian(mean = A(theta), sqrtcov = noise_std, geometry=A.range_geometry)
 posterior = JointDistribution(theta, d)(d=d_obs)
 
 # Print logd of posterior at initial point
-print('Posterior logd at np.array([0, 0, 0.3, 0.4, 0.6]) = {}'.format(posterior.logd(np.array([0, 0, 0.3, 0.4, 0.6]))) )
+print('Posterior logd at np.array([0, 0, 0.3, 0.4, 0.6]) = {}'.format(posterior.logd(theta0)) )
 
 np.random.seed(10)
 # New CWMH
-samplerCWMH = CWMH(posterior, scale = sample_scale)
+samplerCWMH = CWMH(posterior, scale = sample_scale, initial_point = theta0)
 
-# warmup
-samplerCWMH.warmup(Nb)
+#warmup
+samplerCWMH.warmup(Nb, tune_freq = 1)
+
+print("CWMH scales after warmup")
+print(samplerCWMH.scale)
 
 # sample
 samplerCWMH.sample(Ns)
@@ -245,13 +298,13 @@ samplesCWMH.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
 if save_fig:
     plt.savefig(resultpath + resultname + '_allchainsCWMH.png')
 
-for i in range(pipe_geometry.par_shape[0]):
+# for i in range(pipe_geometry.par_shape[0]):
 
-    #plt.figure()
-    #samplesCWMH.burnthin(Nb).plot_chain(variable_indices=i)
+#     plt.figure()
+#     samplesCWMH.burnthin(Nb).plot_chain(variable_indices=i)
 
-    if save_fig:
-        plt.savefig(resultpath + resultname + '_chain{}CWMH.png'.format(i))
+#     if save_fig:
+#         plt.savefig(resultpath + resultname + '_chain{}CWMH.png'.format(i))
 
 
 ################### Gibbs #######################
@@ -261,6 +314,17 @@ cy = ACC2.prior
 r = ACC3.prior
 w = ACC4.prior
 phi = ACC5.prior
+
+# init point
+# Set initial points in distributions (not in sampling strategy) - Interface should be improved
+# Must be set before creating the joint distribution
+# Also must be arrays it seems! ;(
+cx.init_point = np.array([theta0[0]])
+cy.init_point = np.array([theta0[1]])
+r.init_point = np.array([theta0[2]])
+w.init_point = np.array([theta0[3]])
+phi.init_point = np.array([theta0[4]])
+
 # data
 d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
                 sqrtcov = noise_std, geometry=A.range_geometry)
@@ -268,22 +332,36 @@ d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])),
 posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
 
 # Print logd of posterior at initial point
-print('Posterior logd at cx=0, cy=0, r=0.3, w=0.4, phi=0.6 = {}'.format(posterior.logd(0, 0, 0.3, 0.4, 0.6)) )
+print('Posterior logd at cx=0, cy=0, r=0.3, w=0.4, phi=0.6 = {}'.format(posterior.logd(theta0[0], theta0[1], theta0[2], theta0[3], theta0[4])) )
 
 np.random.seed(10)
 # Gibbs sampler
 sampling_strategy = {
-    "cx" : MH(scale = sample_scale),
-    "cy" : MH(scale = sample_scale),
-    "r" : MH(scale = sample_scale),
-    "w" : MH(scale = sample_scale),
-    "phi" : MH(scale = sample_scale)
+    "cx" : myMH(scale = sample_scale),
+    "cy" : myMH(scale = sample_scale),
+    "r" : myMH(scale = sample_scale),
+    "w" : myMH(scale = sample_scale),
+    "phi" : myMH(scale = sample_scale)
 }
 
 samplerGibbs = HybridGibbs(posterior, sampling_strategy)
 
+print("Gibbs scales before warmup")
+print(samplerGibbs.samplers["cx"].scale)
+print(samplerGibbs.samplers["cy"].scale)
+print(samplerGibbs.samplers["r"].scale)
+print(samplerGibbs.samplers["w"].scale)
+print(samplerGibbs.samplers["phi"].scale)
+
 # warmup
 samplerGibbs.warmup(Nb)
+
+print("Gibbs scales after warmup")
+print(samplerGibbs.samplers["cx"].scale)
+print(samplerGibbs.samplers["cy"].scale)
+print(samplerGibbs.samplers["r"].scale)
+print(samplerGibbs.samplers["w"].scale)
+print(samplerGibbs.samplers["phi"].scale)
 
 # sample
 samplerGibbs.sample(Ns)
@@ -298,67 +376,13 @@ samplesGibbs.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
 if save_fig:
     plt.savefig(resultpath + resultname + '_allchainsGibbs.png')
 
-for i in range(pipe_geometry.par_shape[0]):
+# for i in range(pipe_geometry.par_shape[0]):
 
-    #plt.figure()
-    #samplesGibbs.burnthin(Nb).plot_chain(variable_indices=i)
+#     plt.figure()
+#     samplesGibbs.burnthin(Nb).plot_chain(variable_indices=i)
 
-    if save_fig:
-        plt.savefig(resultpath + resultname + '_chain{}Gibbs.png'.format(i))
-
-
-#%%=======================================================================
-# Illustrattion of problem with initial points in Gibbs
-#=========================================================================
-# prior
-cx = ACC1.prior
-cy = ACC2.prior
-r = ACC3.prior
-w = ACC4.prior
-phi = ACC5.prior
-# data
-d  = Gaussian(mean = lambda cx, cy, r, w, phi: A(np.array([cx, cy, r, w, phi])), 
-                sqrtcov = noise_std, geometry=A.range_geometry)
-
-# Set initial points in distributions (not in sampling strategy) - Interface should be improved
-# Must be set before creating the joint distribution
-# Also must be arrays it seems! ;(
-cx.init_point = np.array([0])
-cy.init_point = np.array([0])
-r.init_point = np.array([0.3])
-w.init_point = np.array([0.4])
-phi.init_point = np.array([0.6])
-
-# posterior
-posterior = JointDistribution(cx, cy, r, w, phi, d)(d=d_obs)
-
-np.random.seed(10)
-
-# Gibbs sampler
-sampling_strategy = {
-    "cx" : MH(scale = sample_scale),
-    "cy" : MH(scale = sample_scale),
-    "r" : MH(scale = sample_scale),
-    "w" : MH(scale = sample_scale),
-    "phi" : MH(scale = sample_scale)
-}
-
-samplerInitPoint = HybridGibbs(posterior, sampling_strategy)
-
-# warmup
-samplerInitPoint.warmup(Nb)
-
-# sample
-samplerInitPoint.sample(Ns)
-
-samplesInitPoint = samplerInitPoint.get_samples()
-samples_array = np.array([samplesInitPoint[key].samples for key in samplesInitPoint.keys()]).reshape(len(samplesInitPoint.keys()), -1)
-samplesInitPoint = Samples(samples_array, geometry = pipe_geometry)
-
-plt.figure()
-samplesInitPoint.plot_chain(variable_indices=range(pipe_geometry.par_shape[0]))
-if save_fig:
-    plt.savefig(resultpath + resultname + '_allchainsInitPoint.png')
+#     if save_fig:
+#         plt.savefig(resultpath + resultname + '_chain{}Gibbs.png'.format(i))
 
 
 #%%=======================================================================
