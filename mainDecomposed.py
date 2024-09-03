@@ -11,7 +11,7 @@ import os
 import sys
 # import dill
 from typing import List, Union
-from copy import copy
+from copy import copy, deepcopy
 
 sys.path.append("../CUQIpy") 
 sys.path.append("../CUQIpy-CIL") 
@@ -183,17 +183,16 @@ class SumOfModels:
 
         # Evaluation happens in a shallow copy of the SumModel
         new_model = copy(self)              # Shallow copy of self
-        new_model._models = self._models[:]   # Shallow copy of models in list
-
+        new_model._models = [copy(model) for model in self._models] # Shallow copy of models
         # Go through each keyword argument and each model
         for kwarg, value in kwargs.items():
-            for model in self._models:        
+            for model in new_model._models:        
                 # Evaluate model if kwarg matches _non_default_args
                 if kwarg in cuqi.utilities.get_non_default_args(model):
 
                     # make dict of kwarg and value and evaluate model
                     new_model._shift += model(**{kwarg: value})
-                    
+
                     # Remove model from list since it has been evaluated
                     new_model._models.remove(model)
 
@@ -203,27 +202,9 @@ class SumOfModels:
         if len(new_model._models) == 1: # Single model left, return it (including shift which is the other evaluated models)
             new_model._models[0]._shift = new_model._shift
             return new_model._models[0]
-            # return AffineModel(new_model._models[0].forward, new_model._shift, range_geometry = new_model._models[0].range_geometry, domain_geometry = new_model._models[0].domain_geometry)
 
         return new_model # Else return the SumModel
-    
-    # def __add__(self, other) -> SumOfModels:
-    #     """ Add model or shift to the sum model. """
-    #     new_model = copy(self)
-    #     new_model._models = self._models[:]
-    #     if len(new_model._models) == 0:
-    #         new_model._models.append(other)
-    #         return new_model
-    #     if cuqi.utilities.infer_len(other) != new_model.range_dim:
-    #         raise ValueError("SumModel: Models must have the same range dimension.")
-    #     if isinstance(other, Model):
-    #         new_model._models.append(other)
-    #     elif isinstance(other, SumOfModels):
-    #         new_model._models.extend(other._models)
-    #         new_model._shift += other._shift
-    #     else:
-    #         new_model._shift += other
-    #     return new_model
+
 
     @property
     def range_dim(self):
@@ -529,15 +510,11 @@ w = Gamma(shape=omega0, rate=lambda s: w_rate(s), geometry=Image2D((N+1,N+1)))
 w0 = CUQIarray(s_init*np.ones((N+1)**2), geometry=Image2D((N+1,N+1)))
 
 # Configure model
-print(np.max(A._shift))
 A.domain_geometry = pipe_geometry
 A_theta = copy(A)(theta)
-print(np.max(A_theta._shift))
 A.domain_geometry = Image2D((N,N))
 A_d = copy(A)(d)
-print(np.max(A_d._shift))
 A_joint = SumOfModels(A_theta, A_d)
-print(np.max(A_joint._shift))
 
 # print(np.max(A_joint(theta = theta_true)._shift))
 
@@ -567,31 +544,8 @@ w.init_point = w0
 y2 = Gaussian(mean = A_joint, sqrtcov = noise_std, geometry=A.range_geometry)
 posterior2 = JointDistribution(theta, d, s, w, y2)(y2=y_obs)
 
-# print(np.max(A_joint(d = d0, theta = theta_true))) 
-# print(np.max(A_joint(theta = theta_true)(d = d0)))
-# print(np.max(A_joint(d = d0)(theta = theta_true)))
+#print(A_d.gradient(direction = y_obs, wrt = d0))
 
-tmp0 = A_joint(theta = theta_true, d = d0)
-print(np.max(A_d._shift))
-print(np.max(A_theta._shift))
-tmp1 = copy(A_d(d = d0))
-tmp2 = copy(A_theta(theta = theta_true))
-print(np.max(A_d._shift))
-print(np.max(A_theta._shift))
-tmp3 = A_joint(theta = theta_true)._shift
-tmp4 = A_joint(d = d0)._shift
-print(np.max(A_d._shift))
-print(np.max(A_theta._shift))
-
-print(np.max(A_d(d = d0)-tmp1)) #should not be equal, indicates the shift is ignored in the forward evaluation
-print(np.max(tmp2-tmp3))
-print(np.max(tmp1-tmp4))
-
-print(A_d.gradient(direction = y_obs, wrt = d0))
-
-# print(y2(d = d0, theta = theta_true).logd(y_obs)) # evaluates likelihood
-# print(posterior2(s = s0, w = w0, d = d0).likelihood.logd(theta = theta_true)) 
-# print(posterior2(s = s0, w = w0, theta = theta_true).likelihood.logd(d = d0))
 
 sys.exit()
 
